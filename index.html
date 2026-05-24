@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema Biblioteca - Conexão Direta</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { max-width: 500px; width: 100%; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); box-sizing: border-box; }
+        h2 { text-align: center; color: #333; margin-bottom: 10px; }
+        
+        .mode-selector { display: flex; margin-bottom: 20px; border-radius: 8px; overflow: hidden; border: 1px solid #ccc; }
+        .mode-btn { flex: 1; padding: 12px; font-size: 16px; font-weight: bold; border: none; cursor: pointer; background-color: #e9ecef; color: #495057; }
+        .mode-btn.active-loan { background-color: #007bff; color: white; }
+        .mode-btn.active-return { background-color: #dc3545; color: white; }
+
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: 600; color: #555; }
+        input, select { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
+        #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 15px; border: 2px dashed #007bff; min-height: 200px; background-color: #000; }
+        
+        button.submit-btn { width: 100%; padding: 14px; color: white; border: none; border-radius: 6px; font-size: 18px; cursor: pointer; font-weight: bold; }
+        .btn-loan { background-color: #28a745; }
+        .btn-return { background-color: #dc3545; }
+        button:disabled { background-color: #6c757d !important; cursor: not-allowed; }
+        
+        .status-message { margin-top: 15px; padding: 12px; border-radius: 6px; text-align: center; display: none; font-weight: bold; font-size: 15px; }
+        .info-box { background-color: #fff3cd; color: #856404; padding: 10px; border-radius: 6px; margin-bottom: 15px; font-size: 14px; display: none; font-weight: bold; text-align: center; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>📚 Biblioteca Escolar</h2>
+    
+    <div class="mode-selector">
+        <button type="button" id="modeLoan" class="mode-btn active-loan" onclick="setModo('emprestimo')">🔄 Empréstimo</button>
+        <button type="button" id="modeReturn" class="mode-btn" onclick="setModo('devolucao')">📥 Devolução Rápida</button>
+    </div>
+    
+    <div id="infoBox" class="info-box">ℹ️ Modo Devolução: Apenas escaneie o livro. O sistema identificará o aluno sozinho.</div>
+    
+    <div id="reader"></div>
+
+    <form id="loanForm">
+        <div class="form-group">
+            <label for="barcode">Código do Livro Escaneado</label>
+            <input type="text" id="barcode" placeholder="Aproxime o código do livro na câmera..." required readonly style="background-color: #e9ecef;">
+        </div>
+
+        <div id="studentFields">
+            <div class="form-group">
+                <label for="studentClass">1. Selecione a Turma</label>
+                <select id="studentClass" required>
+                    <option value="">-- Carregando Turmas... --</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="studentName">2. Selecione o Aluno</label>
+                <select id="studentName" required disabled>
+                    <option value="">-- Selecione a Turma Primeiro --</option>
+                </select>
+            </div>
+        </div>
+
+        <button type="submit" id="btnSubmit" class="submit-btn btn-loan">Confirmar Empréstimo</button>
+    </form>
+
+    <div id="status" class="status-message"></div>
+</div>
+
+<script>
+    const URL_BASE = "https://hltatpgnhnhqvstosmqw.supabase.co/rest/v1";
+    const CHAVE_ANON = "sb_publishable_PKYGh7OuSkfobn6c_dKb2w_9I3G9re8";
+    
+    // CORRIGIDO: Nome da variável junto sem espaços
+    const headersPadrao = {
+        "apikey": CHAVE_ANON,
+        "Authorization": `Bearer ${CHAVE_ANON}`,
+        "Content-Type": "application/json"
+    };
+
+    let modoAtual = 'emprestimo';
+    let html5QrcodeScanner = null;
+
+    function setModo(modo) {
+        modoAtual = modo;
+        const btnLoan = document.getElementById('modeLoan');
+        const btnReturn = document.getElementById('modeReturn');
+        const btnSubmit = document.getElementById('btnSubmit');
+        const studentFields = document.getElementById('studentFields');
+        const infoBox = document.getElementById('infoBox');
+        const readerBox = document.getElementById('reader');
+
+        if (modo === 'emprestimo') {
+            btnLoan.classList.add('active-loan');
+            btnReturn.classList.remove('active-return');
+            btnSubmit.innerText = "Confirmar Empréstimo";
+            btnSubmit.className = "submit-btn btn-loan";
+            studentFields.style.display = "block";
+            infoBox.style.display = "none";
+            readerBox.style.border = "2px dashed #007bff";
+            document.getElementById('studentClass').required = true;
+            document.getElementById('studentName').required = true;
+        } else {
+            btnLoan.classList.remove('active-loan');
+            btnReturn.classList.add('active-return');
+            btnSubmit.innerText = "Dar Baixa no Livro";
+            btnSubmit.className = "submit-btn btn-return";
+            studentFields.style.display = "none";
+            infoBox.style.display = "block";
+            readerBox.style.border = "2px dashed #dc3545";
+            document.getElementById('studentClass').required = false;
+            document.getElementById('studentName').required = false;
+        }
+    }
+
+    async function carregarTurmas() {
+        try {
+            const response = await fetch(`${URL_BASE}/alunos?select=turma`, {
+                method: "GET",
+                headers: headersPadrao
+            });
+            const data = await response.json();
+            
+            if (!response.ok) throw new Error(data.message || "Falha na conexão");
+
+            const turmasUnicas = [...new Set(data.map(item => item.turma))].filter(t => t && t !== 'null' && t !== '').sort();
+            const selectTurma = document.getElementById('studentClass');
+            selectTurma.innerHTML = '<option value="">-- Escolha a Turma --</option>';
+            
+            turmasUnicas.forEach(turma => {
+                let option = document.createElement('option');
+                option.value = turma;
+                option.innerText = turma;
+                selectTurma.appendChild(option);
+            });
+        } catch (err) {
+            showStatus("❌ Erro de Conexão com o Banco: " + err.message, "#f8d7da", "#721c24");
+        }
+    }
+
+    document.getElementById('studentClass').addEventListener('change', async (e) => {
+        const turma = e.target.value;
+        const selectAluno = document.getElementById('studentName');
+        selectAluno.innerHTML = '<option value="">-- Carregando Alunos... --</option>';
+        selectAluno.disabled = true;
+        if (!turma) return;
+
+        try {
+            const response = await fetch(`${URL_BASE}/alunos?turma=eq.${encodeURIComponent(turma)}&select=nome&order=nome.asc`, {
+                method: "GET",
+                headers: headersPadrao
+            });
+            const data = await response.json();
+
+            selectAluno.innerHTML = '<option value="">-- Escolha o Aluno --</option>';
+            data.forEach(aluno => {
+                let option = document.createElement('option');
+                option.value = aluno.nome;
+                option.innerText = aluno.nome;
+                selectAluno.appendChild(option);
+            });
+            selectAluno.disabled = false;
+        } catch (err) {
+            console.error(err);
+        }
+    });
+
+    function iniciarCamera() {
+        html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
+            fps: 15, 
+            qrbox: { width: 260, height: 150 },
+            rememberLastUsedCamera: true
+        }, false);
+        
+        html5QrcodeScanner.render((decodedText) => {
+            document.getElementById('barcode').value = decodedText;
+            if (navigator.vibrate) navigator.vibrate(100);
+            showStatus("Livro reconhecido pelo scanner!", "#e2f0d9", "#385723");
+        }, (error) => {
+            // Log de foco ignorado silenciosamente
+        });
+    }
+
+    document.getElementById('loanForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('btnSubmit');
+        btn.disabled = true;
+
+        const barcode = document.getElementById('barcode').value;
+        const alunoNome = document.getElementById('studentName').value;
+        const turma = document.getElementById('studentClass').value;
+
+        try {
+            if (modoAtual === 'emprestimo') {
+                const checkResp = await fetch(`${URL_BASE}/movimentacoes?nome_aluno=eq.${encodeURIComponent(alunoNome)}&devolvido=eq.false&select=codigo_livro`, {
+                    method: "GET",
+                    headers: headersPadrao
+                });
+                const pendencias = await checkResp.json();
+
+                if (pendencias && pendencias.length > 0) {
+                    showStatus(`⚠️ BLOQUEADO: ${alunoNome} deve devolver o livro [${pendencias[0].codigo_livro}] antes!`, "#f8d7da", "#721c24");
+                    btn.disabled = false;
+                    return;
+                }
+
+                const insertResp = await fetch(`${URL_BASE}/movimentacoes`, {
+                    method: "POST",
+                    headers: headersPadrao,
+                    body: JSON.stringify({
+                        codigo_livro: barcode,
+                        nome_aluno: alunoNome,
+                        turma_aluno: turma,
+                        data_saida: new Date().toISOString(),
+                        devolvido: false
+                    })
+                });
+
+                if (!insertResp.ok) throw new Error("Erro ao gravar empréstimo");
+                showStatus(`🎉 Sucesso! Livro registrado para ${alunoNome}.`, "#d4edda", "#155724");
+
+            } else {
+                const findResp = await fetch(`${URL_BASE}/movimentacoes?codigo_livro=eq.${encodeURIComponent(barcode)}&devolvido=eq.false&order=data_saida.desc&limit=1`, {
+                    method: "GET",
+                    headers: headersPadrao
+                });
+                const registro = await findResp.json();
+
+                if (!registro || registro.length === 0) {
+                    showStatus(`❌ Erro: Este livro não consta como pendente no sistema.`, "#fff3cd", "#856404");
+                    btn.disabled = false;
+                    return;
+                }
+
+                const updateResp = await fetch(`${URL_BASE}/movimentacoes?id=eq.${registro[0].id}`, {
+                    method: "PATCH",
+                    headers: headersPadrao,
+                    body: JSON.stringify({
+                        devolvido: true,
+                        data_devolucao: new Date().toISOString()
+                    })
+                });
+
+                if (!updateResp.ok) throw new Error("Erro ao atualizar devolução");
+                showStatus(`✅ Devolução concluída! O cadastro de [${registro[0].nome_aluno}] foi liberado.`, "#d4edda", "#155724");
+            }
+
+            document.getElementById('barcode').value = "";
+            document.getElementById('studentName').selectedIndex = 0;
+
+        } catch (err) {
+            showStatus("❌ Falha técnica: " + err.message, "#f8d7da", "#721c24");
+        } finally {
+            btn.disabled = false;
+        }
+    });
+
+    function showStatus(text, bgColor, textColor) {
+        const statusDiv = document.getElementById('status');
+        statusDiv.innerText = text; statusDiv.style.backgroundColor = bgColor;
+        statusDiv.style.color = textColor; statusDiv.style.display = 'block';
+    }
+
+    async function init() {
+        await carregarTurmas();
+        iniciarCamera();
+    }
+    
+    init();
+</script>
+</body>
+</html>
