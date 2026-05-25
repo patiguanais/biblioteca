@@ -2,15 +2,15 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>📚 Biblioteca Escolar</title>
+    <title>📚 Biblioteca</title>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { font-family: sans-serif; padding: 20px; background: #f4f4f9; }
         .box { background: white; padding: 20px; border-radius: 10px; max-width: 400px; margin: auto; }
-        select, button { width: 100%; padding: 15px; margin: 10px 0; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; }
+        select, button { width: 100%; padding: 15px; margin: 10px 0; border-radius: 8px; border: 1px solid #ccc; }
         #reader { width: 100%; height: 250px; background: #333; margin-top: 10px; }
-        .log-erro { color: red; font-size: 12px; }
+        .log-erro { color: red; font-size: 14px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -18,47 +18,45 @@
 <div class="box">
     <h2>📚 Biblioteca</h2>
     <div id="status" class="log-erro"></div>
-    
-    <label>Turma:</label>
     <select id="turmaSelect"><option>A carregar...</option></select>
-    
-    <button id="btnEmprestimo">Empréstimo</button>
-    <button id="btnDevolucao">Devolução</button>
-    
-    <button onclick="iniciarLeitor()">📸 Iniciar Câmera Traseira</button>
+    <button onclick="iniciarLeitor()">📸 Abrir Câmera Traseira</button>
     <div id="reader"></div>
 </div>
 
 <script>
-    const SUPABASE_URL = "https://hltatpgnhnhqvstosmqw.supabase.co";
-    const SUPABASE_KEY = "sb_publishable_PKYGh7OuSkfobn6c_dKb2w_9I3G9re8";
-    
-    try {
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    // Configuração com verificação de carregamento
+    window.addEventListener('load', async () => {
+        const statusDiv = document.getElementById('status');
         
-        async function carregarTurmas() {
-            document.getElementById('status').innerText = "A buscar turmas...";
-            const { data, error } = await supabase.from('turmas').select('nome');
-            
-            if (error) {
-                document.getElementById('status').innerText = "Erro Supabase: " + error.message;
-                return;
+        try {
+            // Verifica se o Supabase carregou
+            if (typeof supabase === 'undefined') {
+                throw new Error("Biblioteca Supabase não carregou.");
             }
+
+            const SUPABASE_URL = "https://hltatpgnhnhqvstosmqw.supabase.co";
+            const SUPABASE_KEY = "sb_publishable_PKYGh7OuSkfobn6c_dKb2w_9I3G9re8";
+            const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            
+            statusDiv.innerText = "A buscar turmas...";
+            
+            const { data, error } = await client.from('turmas').select('nome');
+            
+            if (error) throw error;
             
             const select = document.getElementById('turmaSelect');
-            select.innerHTML = '<option value="">Selecione...</option>';
+            select.innerHTML = '<option value="">Selecione a turma...</option>';
             data.forEach(t => {
                 let opt = document.createElement('option');
                 opt.value = t.nome; opt.textContent = t.nome;
                 select.appendChild(opt);
             });
-            document.getElementById('status').innerText = "Sucesso!";
+            statusDiv.innerText = ""; // Limpa erros se tudo correr bem
+            
+        } catch (e) {
+            statusDiv.innerText = "Erro: " + e.message;
         }
-        
-        carregarTurmas();
-    } catch (e) {
-        document.getElementById('status').innerText = "Erro Geral: " + e.message;
-    }
+    });
 
     function iniciarLeitor() {
         const html5QrCode = new Html5Qrcode("reader");
@@ -68,7 +66,7 @@
             (text) => { alert("Lido: " + text); html5QrCode.stop(); },
             (err) => { console.log(err); }
         ).catch(err => {
-            alert("Erro na câmera. Tente dar permissão ao navegador.");
+            alert("Erro na câmera. Certifique-se que deu permissão.");
         });
     }
 </script>
