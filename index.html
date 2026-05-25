@@ -2,168 +2,74 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>📚 Sistema de Biblioteca Escolar</title>
+    <title>📚 Biblioteca Escolar</title>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 15px; background: #f0f2f5; display: flex; justify-content: center; margin: 0; }
-        .box { background: white; padding: 25px; border-radius: 12px; width: 100%; max-width: 420px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
-        h2 { text-align: center; color: #1e293b; margin-top: 0; margin-bottom: 20px; font-size: 22px; }
-        label { font-weight: 600; color: #475569; display: block; margin-top: 12px; font-size: 14px; }
-        select, button { width: 100%; padding: 14px; margin: 6px 0 12px 0; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 16px; box-sizing: border-box; }
-        select:focus { border-color: #3b82f6; outline: none; }
-        .botoes-container { display: flex; gap: 12px; margin-top: 5px; }
-        .botoes-container button { flex: 1; font-weight: bold; cursor: pointer; transition: all 0.2s; border: none; margin: 0; }
-        .btn-acao { background: #e2e8f0; color: #64748b; }
-        .btn-acao.ativo-emprestimo { background: #22c55e !important; color: white !important; transform: scale(1.02); box-shadow: 0 4px 6px rgba(34, 197, 94, 0.2); }
-        .btn-acao.ativo-devolucao { background: #eab308 !important; color: #1e293b !important; transform: scale(1.02); box-shadow: 0 4px 6px rgba(234, 179, 8, 0.2); }
-        #btnCamera { background: #3b82f6; color: white; border: none; font-weight: bold; cursor: pointer; margin-top: 10px; }
-        #reader { width: 100%; min-height: 250px; background: #0f172a; border-radius: 10px; margin-top: 15px; overflow: hidden; }
-        .status-msg { text-align: center; font-weight: bold; padding: 10px; border-radius: 6px; margin: 10px 0; display: none; }
+        body { font-family: sans-serif; padding: 20px; background: #f4f4f9; }
+        .box { background: white; padding: 20px; border-radius: 10px; max-width: 400px; margin: auto; }
+        select, button { width: 100%; padding: 15px; margin: 10px 0; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; }
+        #reader { width: 100%; height: 250px; background: #333; margin-top: 10px; }
+        .log-erro { color: red; font-size: 12px; }
     </style>
 </head>
 <body>
 
 <div class="box">
-    <h2>📚 Biblioteca Escolar</h2>
+    <h2>📚 Biblioteca</h2>
+    <div id="status" class="log-erro"></div>
     
-    <label>1. Selecione a Turma:</label>
-    <select id="turmaSelect">
-        <option value="">Carregando turmas...</option>
-    </select>
+    <label>Turma:</label>
+    <select id="turmaSelect"><option>A carregar...</option></select>
     
-    <label>2. Selecione o Aluno:</label>
-    <select id="alunoSelect" disabled>
-        <option value="">Selecione a turma primeiro...</option>
-    </select>
+    <button id="btnEmprestimo">Empréstimo</button>
+    <button id="btnDevolucao">Devolução</button>
     
-    <label>3. Escolha a Operação:</label>
-    <div class="botoes-container">
-        <button id="btnEmprestimo" class="btn-acao ativo-emprestimo" onclick="mudarAcao('emprestimo')">✅ Empréstimo</button>
-        <button id="btnDevolucao" class="btn-acao" onclick="mudarAcao('devolucao')">🔄 Devolução</button>
-    </div>
-    
-    <button id="btnCamera" onclick="inicializarLeitor()">📸 Abrir Câmera Traseira</button>
+    <button onclick="iniciarLeitor()">📸 Iniciar Câmera Traseira</button>
     <div id="reader"></div>
-    <div id="statusArea" class="status-msg"></div>
 </div>
 
 <script>
     const SUPABASE_URL = "https://hltatpgnhnhqvstosmqw.supabase.co";
     const SUPABASE_KEY = "sb_publishable_PKYGh7OuSkfobn6c_dKb2w_9I3G9re8";
-    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-    let html5QrCode = null;
-    let acaoAtual = 'emprestimo';
-
-    window.addEventListener('DOMContentLoaded', () => {
-        carregarTurmas();
-    });
-
-    function mudarAcao(opcao) {
-        acaoAtual = opcao;
-        const btnE = document.getElementById('btnEmprestimo');
-        const btnD = document.getElementById('btnDevolucao');
-        if (opcao === 'emprestimo') {
-            btnE.classList.add('ativo-emprestimo');
-            btnD.classList.remove('ativo-devolucao');
-        } else {
-            btnD.classList.add('ativo-devolucao');
-            btnE.classList.remove('ativo-emprestimo');
-        }
-    }
-
-    async function carregarTurmas() {
-        try {
+    
+    try {
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        
+        async function carregarTurmas() {
+            document.getElementById('status').innerText = "A buscar turmas...";
             const { data, error } = await supabase.from('turmas').select('nome');
-            if (error) throw error;
+            
+            if (error) {
+                document.getElementById('status').innerText = "Erro Supabase: " + error.message;
+                return;
+            }
+            
             const select = document.getElementById('turmaSelect');
-            select.innerHTML = '<option value="">Selecione a turma...</option>';
+            select.innerHTML = '<option value="">Selecione...</option>';
             data.forEach(t => {
                 let opt = document.createElement('option');
                 opt.value = t.nome; opt.textContent = t.nome;
                 select.appendChild(opt);
             });
-            select.addEventListener('change', carregarAlunos);
-        } catch (e) {
-            mostrarMensagem("❌ Erro ao buscar turmas: " + e.message, "#f8d7da", "#721c24");
+            document.getElementById('status').innerText = "Sucesso!";
         }
+        
+        carregarTurmas();
+    } catch (e) {
+        document.getElementById('status').innerText = "Erro Geral: " + e.message;
     }
 
-    async function carregarAlunos(e) {
-        const turma = e.target.value;
-        const selectAluno = document.getElementById('alunoSelect');
-        if (!turma) {
-            selectAluno.innerHTML = '<option value="">Selecione a turma primeiro...</option>';
-            selectAluno.disabled = true;
-            return;
-        }
-        selectAluno.innerHTML = '<option value="">Buscando alunos...</option>';
-        selectAluno.disabled = false;
-        try {
-            const { data, error } = await supabase.from('alunos').select('nome').eq('turma', turma);
-            if (error) throw error;
-            selectAluno.innerHTML = '<option value="">Selecione o aluno...</option>';
-            if (data && data.length > 0) {
-                data.forEach(a => {
-                    let opt = document.createElement('option');
-                    opt.value = a.nome; opt.textContent = a.nome;
-                    selectAluno.appendChild(opt);
-                });
-            } else {
-                selectAluno.innerHTML = '<option value="">Nenhum aluno nesta turma</option>';
-            }
-        } catch (err) {
-            mostrarMensagem("❌ Erro ao buscar alunos: " + err.message, "#f8d7da", "#721c24");
-        }
-    }
-
-    function inicializarLeitor() {
-        if(html5QrCode) {
-            html5QrCode.stop().then(() => iniciarFluxoVideo()).catch(() => iniciarFluxoVideo());
-        } else {
-            iniciarFluxoVideo();
-        }
-    }
-
-    function iniciarFluxoVideo() {
-        html5QrCode = new Html5Qrcode("reader");
-        const config = { fps: 15, qrbox: { width: 260, height: 150 } };
+    function iniciarLeitor() {
+        const html5QrCode = new Html5Qrcode("reader");
         html5QrCode.start(
-            { facingMode: { exact: "environment" } }, 
-            config,
-            (decodedText) => processarLeitura(decodedText),
-            (error) => {}
+            { facingMode: { exact: "environment" } },
+            { fps: 10, qrbox: 250 },
+            (text) => { alert("Lido: " + text); html5QrCode.stop(); },
+            (err) => { console.log(err); }
         ).catch(err => {
-            html5QrCode.start(
-                { facingMode: "environment" }, 
-                config,
-                (decodedText) => processarLeitura(decodedText),
-                (e) => {}
-            ).catch(errFinal => {
-                mostrarMensagem("❌ Erro: Dê permissão para usar a câmera traseira.", "#f8d7da", "#721c24");
-            });
+            alert("Erro na câmera. Tente dar permissão ao navegador.");
         });
-    }
-
-    function processarLeitura(codigoLivro) {
-        const aluno = document.getElementById('alunoSelect').value;
-        const turma = document.getElementById('turmaSelect').value;
-        if (!turma || !aluno) {
-            alert("⚠️ Escolha a Turma e o Aluno antes de ler o código!");
-            return;
-        }
-        if (acaoAtual === 'emprestimo') {
-            alert(`✅ EMPRÉSTIMO\nAluno: ${aluno}\nCódigo do Livro: ${codigoLivro}`);
-        } else {
-            alert(`🔄 DEVOLUÇÃO\nAluno: ${aluno}\nCódigo do Livro: ${codigoLivro}`);
-        }
-    }
-
-    function mostrarMensagem(texto, fundo, corTexto) {
-        const area = document.getElementById('statusArea');
-        area.innerText = texto; area.style.background = fundo; area.style.color = corTexto; area.style.display = 'block';
     }
 </script>
 </body>
